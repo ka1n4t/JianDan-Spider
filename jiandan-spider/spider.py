@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-from pprint import pprint
 from urllib import request
 from bs4 import BeautifulSoup
 import hashlib
@@ -8,6 +7,11 @@ import gzip
 import io
 import re
 
+headers = {
+    'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.89 Safari/537.36',
+    'Accept-Encoding':'gzip, deflate',
+    'Accept-Language':'zh-CN,zh;q=0.9',
+    }
 
 def md5(src):
     m = hashlib.md5()
@@ -20,12 +24,47 @@ def decode_base64(data):
         data += '='* missing_padding
     return base64.b64decode(data)
 
-headers = {
-    'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.89 Safari/537.36',
-    'Accept-Encoding':'gzip, deflate',
-    'Accept-Language':'zh-CN,zh;q=0.9',
-    'Cookie':'nsfw-click-load=on; _gat_gtag_UA_462921_3=1; _ga=GA1.2.1395154870.1513853310; _gid=GA1.2.304204835.1513853310'
-    }
+def calculate_url(img_hash, constant):
+    k = 'DECODE'
+    q = 4
+    constant = md5(constant)
+    o = md5(constant[0:16])
+    #n = md5(constant[16:16])
+    n = md5(constant[16:32])
+    
+    l = img_hash[0:q]
+    c = o+md5(o + l)
+
+    img_hash = img_hash[q:]
+    k = decode_base64(img_hash)
+    h = []
+    for g in range(256):
+        h.append(g)
+
+    b = []
+    for g in range(256):
+        b.append(ord(c[g % len(c)]))
+
+    f = 0
+    for g in range(256):
+        f = (f + h[g] + b[g]) % 256
+        tmp = h[g]
+        h[g] = h[f]
+        h[f] = tmp
+
+    t = ""
+    f = 0
+    p = 0
+    for g in range(len(k)):
+        p = (p + 1) % 256
+        f = (f + h[p]) % 256
+        tmp = h[p]
+        h[p] = h[f]
+        h[f] = tmp
+        t += chr(k[g] ^ (h[(h[p] + h[f]) % 256]))
+    t = t[26:]
+
+    return t
 
 def get_raw_html(url):
     req = request.Request(url=url, headers=headers)
@@ -49,7 +88,7 @@ def get_hashes_constant_preurl (url):
     for each in soup.find_all(class_='img-hash'):
         hashes.append(each.string)
         #print(each.string)
-    
+
     js = re.search(r'<script\ssrc=\"\/\/(cdn.jandan.net\/static\/min\/.*?)\">.*?<\/script>', html)
     jsFileURL = 'http://'+js.group(1)
     jsFile = get_raw_html(jsFileURL)
@@ -72,7 +111,9 @@ if __name__ == '__main__':
     
     index = 1
     for each in hashes:
+        real_url = calculate_url(each, constant_hash)
         print("{} : {}".format(index, each))
+        print("real_url : {}".format(real_url))
         index += 1
 
     print("\n\n\n")
