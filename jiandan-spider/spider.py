@@ -1,9 +1,26 @@
+###########################################################
+#                                                         #
+#                   Image Spider                          #
+#                                                         #
+#                   Version: 1.0                          #
+#                                                         #
+#                  Author: ka1n4t                         #
+#                                                         #
+#                Thanks to: van1997                       #
+#                                                         #
+#                 Date: 2017-12-22                        #
+#                                                         #
+###########################################################
+
 #!/usr/bin/env python3
-from urllib import request
 from bs4 import BeautifulSoup
+from urllib import request
+import argparse
 import hashlib
 import base64
 import gzip
+import time
+import os
 import io
 import re
 
@@ -75,19 +92,22 @@ def get_raw_html(url):
         buf = io.BytesIO(text)
         translated_raw = gzip.GzipFile(fileobj=buf)
         text = translated_raw.read()
+
     text = text.decode('utf-8')
     return text
 
-def get_hashes_constant_preurl (url):
-    html = get_raw_html(url)
+def get_soup(html):
     soup = BeautifulSoup(html, 'lxml')
-    preurl = 'http:'+soup.find(class_='previous-comment-page').get('href')
-    #print("preurl: ", preurl)
+    return soup
 
+def get_preurl(soup):
+    preurl = 'http:'+soup.find(class_='previous-comment-page').get('href')
+    return preurl
+
+def get_hashesAndConstant(soup, html):
     hashes = []
     for each in soup.find_all(class_='img-hash'):
         hashes.append(each.string)
-        #print(each.string)
 
     js = re.search(r'<script\ssrc=\"\/\/(cdn.jandan.net\/static\/min\/.*?)\">.*?<\/script>', html)
     jsFileURL = 'http://'+js.group(1)
@@ -95,30 +115,55 @@ def get_hashes_constant_preurl (url):
 
     target_func = re.search(r'f_\w*?\(e,\"(\w*?)\"\)', jsFile)
     constant_hash = target_func.group(1)
-    #print(constant_hash)
 
-    return hashes, constant_hash, preurl
+    return hashes, constant_hash
+
+def download_images(urls):
+    if not os.path.exists('downloads'):
+        os.makedirs('downloads')
+    index = 1
+    for url in urls:
+        filename = ''
+        file_suffix = re.match(r'.*(\.\w+)', url).group(1)
+        filename = str(index)+file_suffix
+        request.urlretrieve(url, 'downloads/'+filename)
+        index += 1
+        time.sleep(3)
+
+def spider(url, page):
+    #get hashes, constant-hash, previous page's url
+    html = get_raw_html(url)
+    soup = get_soup(html)
+
+    params = get_hashesAndConstant(soup, html)
+    hashes = params[0]
+    constant_hash = params[1]
+
+    preurl = get_preurl(soup)
+    
+    urls = []
+    index = 1
+    for each in hashes:
+        real_url = 'http:'+calculate_url(each, constant_hash)
+        replace = re.match(r'(\/\/w+\.sinaimg\.cn\/)(\w+)(\/.+\.gif)', real_url)
+        if replace:
+            real_url = replace.group(1)+'thumb180'+replace.group(3)
+        urls.append(real_url)
+        index += 1
+
+    download_images(urls)
+
+    page -= 1
+    if page > 0:
+        spider(preurl, page)
 
 
 if __name__ == '__main__':
-    url = 'http://jandan.net/ooxx/'
-
-    #get hashes, constant-hash, previous page's url
-    params = get_hashes_constant_preurl(url)
-    hashes = params[0]
-    constant_hash = params[1]
-    preurl = params[2]
+    #user interface
+    parser = argparse.ArgumentParser(description='download images from Jandan.net')
+    parser.add_argument('-p', metavar='PAGE', default=3, type=int, help='the number of pages you want to download (default 3)')
+    args = parser.parse_args()
     
-    index = 1
-    for each in hashes:
-        real_url = calculate_url(each, constant_hash)
-        print("{} : {}".format(index, each))
-        print("real_url : {}".format(real_url))
-        index += 1
-
-    print("\n\n\n")
-    print("constant_hash: ", constant_hash)
-    print("\n\n\n")
-    print("preurl: ", preurl)
-
-
+    #start crawling
+    url = 'http://jandan.net/ooxx/'
+    spider(url, args.p)
