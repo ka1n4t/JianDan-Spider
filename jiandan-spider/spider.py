@@ -161,7 +161,7 @@ def spider(url, page):
 if __name__ == '__main__':
     #user interface
     parser = argparse.ArgumentParser(description='download images from Jandan.net')
-    parser.add_argument('-p', metavar='PAGE', default=3, type=int, help='the number of pages you want to download (default 3)')
+    parser.add_argument('-p', metavar='PAGE', default=1, type=int, help='the number of pages you want to download (default 1)')
     args = parser.parse_args()
     
     #start crawling
