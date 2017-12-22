@@ -121,13 +121,11 @@ def get_hashesAndConstant(soup, html):
 def download_images(urls):
     if not os.path.exists('downloads'):
         os.makedirs('downloads')
-    index = 1
     for url in urls:
         filename = ''
         file_suffix = re.match(r'.*(\.\w+)', url).group(1)
-        filename = str(index)+file_suffix
+        filename = md5(str(time.time()))+file_suffix
         request.urlretrieve(url, 'downloads/'+filename)
-        index += 1
         time.sleep(3)
 
 def spider(url, page):
