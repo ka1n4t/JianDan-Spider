@@ -1,33 +1,26 @@
 #!/usr/bin/env python3
 ###########################################################
 #                                                         #
-#                   Image Spider                          #
+#             Muti-threaded Image-Spider                  #
 #                                                         #
-#                   Version: 1.0                          #
+#                   Version: 2.0                          #
 #                                                         #
 #                  Author: ka1n4t                         #
 #                                                         #
 #                Thanks to: van1997                       #
 #                                                         #
-#                 Date: 2017-12-22                        #
+#              Update-Date: 2018-02-27                    #
 #                                                         #
 ###########################################################
 
 from bs4 import BeautifulSoup
 from urllib import request
-import argparse
-import hashlib
-import base64
-import gzip
-import time
-import os
-import io
-import re
+import threading,argparse,hashlib,base64,gzip,time,os,io,re
 
 headers = {
     'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.89 Safari/537.36',
     'Accept-Encoding':'gzip, deflate',
-    'Accept-Language':'zh-CN,zh;q=0.9',
+    'Accept-Language':'zh-CN,zh;q=0.9'
     }
 
 def md5(src):
@@ -128,16 +121,22 @@ def download_images(urls):
         request.urlretrieve(url, 'downloads/'+filename)
         time.sleep(3)
 
-def spider(url, page):
-    #get hashes, constant-hash, previous page's url
+
+def spider():
+    #获取url时用锁
+    print(time.time())
+    lock.acquire()
+    global url
     html = get_raw_html(url)
     soup = get_soup(html)
-
+    #将url替换成下一页的url，用于下一页的爬取
+    url = get_preurl(soup)
+    #释放锁
+    lock.release()
+    #get hashes&constant-hash
     params = get_hashesAndConstant(soup, html)
     hashes = params[0]
     constant_hash = params[1]
-
-    preurl = get_preurl(soup)
     
     urls = []
     index = 1
@@ -151,17 +150,34 @@ def spider(url, page):
 
     download_images(urls)
 
-    page -= 1
-    if page > 0:
-        spider(preurl, page)
-
+def start(page):
+    global lock
+    lock = threading.Lock()
+    thread_list = []
+	
+    #start crawling
+    for i in range(page):
+        t = threading.Thread(target=spider)
+        thread_list.append(t)
+    
+    for t in thread_list:
+        t.setDaemon(True)
+        t.start()
+    
+    for t in thread_list:
+        t.join()
+	
 
 if __name__ == '__main__':
     #user interface
     parser = argparse.ArgumentParser(description='download images from Jandan.net')
     parser.add_argument('-p', metavar='PAGE', default=1, type=int, help='the number of pages you want to download (default 1)')
     args = parser.parse_args()
-    
-    #start crawling
+    page = args.p
+
+    global url
     url = 'http://jandan.net/ooxx/'
-    spider(url, args.p)
+
+    start(page)
+
+
